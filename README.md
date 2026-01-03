@@ -3,4 +3,4 @@ Navigate to `localhost:8000` in the browser.
 
 If it's too slow try shrinking `stops.txt` and `shapes.txt` files.
 
-![Demo gif](imgs/busses2.gif)
+![Demo gif](imgs/buses2.gif)
