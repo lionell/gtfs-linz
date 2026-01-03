@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<base target="_top">
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+
+	<title>Example</title>
+
+	<!-- <link rel="shortcut icon" type="image/x-icon" href="docs/images/favicon.ico" /> -->
+
+	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" integrity="sha256-kLaT2GOSpHechhsozzB+flnD+zUyjE2LlfWPgU04xyI=" crossorigin=""/>
+	<script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js" integrity="sha256-WBkoXOwTeyKclOHuWtc+i2uENFpDZ9YPdf5Hf+D7ewM=" crossorigin=""></script>
+
+	<script src="https://unpkg.com/papaparse@latest/papaparse.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.2/d3.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/d3-geo-voronoi@2"></script>
+	<script src="MovingMarker.js"></script>
+
+
+	<style>
+		html, body {
+			height: 100%;
+			margin: 0;
+		}
+		.leaflet-container {
+			width: 100%;
+			height: 100%;
+			max-width: 100%;
+			max-height: 100%;
+		}
+	</style>
+
+</head>
+<body>
+
+<div id="map" class="leaflet-container"></div>
+<script>
+	const linz = [48.28398229911099, 14.291687611291062];
+	const map = L.map('map').setView(linz, /* zoom= */ 15);
+
+	const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+		maxZoom: 19,
+		attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>' +
+		' | <a href="imgs/linz_large.png">Traffic</a>'
+	}).addTo(map);
+
+	var stopMarkers = [];
+	var stops = new Map();
+	var coords = [];
+
+	Papa.parse('linz/stops.txt', {
+		header: true,
+		download: true,
+		dynamicTyping: true,
+		skipEmptyLines: true,
+		step: (row) => {
+			const {stop_name, stop_id, stop_lat, stop_lon, ...rest} = row.data;
+			const point = L.latLng(stop_lat, stop_lon);
+			stops.set(stop_id, point);
+
+			const marker = L.marker(point).addTo(map)
+				.bindPopup(`${stop_name}</br><i>${stop_id}</i>`);
+			stopMarkers.push(marker);
+		},
+		complete: () => {
+			coords = Array.from(stops.values()).map(p => [p.lng, p.lat]);
+			const voronoi = d3.geoVoronoi(coords);
+			L.geoJSON(voronoi.polygons()).addTo(map);
+		}
+	});
+
+	var bus = L.icon({
+	    iconUrl: 'imgs/bus.png',
+	    iconSize: [24, 24],
+	    iconAnchor: [12, 12],
+	    popupAnchor: [-12, -12],
+	});
+
+	var shapes = new Map();
+	var shapeMarkers = [];
+
+	Papa.parse('linz/shapes.txt', {
+		header: true,
+		download: true,
+		dynamicTyping: true,
+		skipEmptyLines: true,
+		complete: function(result) {
+			for (const row of result.data) {
+				const {shape_id, shape_pt_lat, shape_pt_lon, ...rest} = row;
+				const point = L.latLng(shape_pt_lat, shape_pt_lon);
+
+				if (!shapes.has(shape_id)) {
+					shapes.set(shape_id, []);
+				}
+				shapes.get(shape_id).push(point);
+			}
+
+			for (const [shape_id, shape] of shapes.entries()) {
+				const marker = L.Marker.movingMarker(shape, 100000, {autostart: true, loop: true, icon: bus}).addTo(map)
+						.bindPopup(shape_id);
+				shapeMarkers.push(marker);
+			}
+		},
+	});
+
+	map.on('click', function(e) {
+		for (const m of shapeMarkers) {
+			if (m.isPaused())
+				m.resume();
+			else
+				m.pause();
+		}
+	});
+
+</script>
+
+</body>
+</html>
+
